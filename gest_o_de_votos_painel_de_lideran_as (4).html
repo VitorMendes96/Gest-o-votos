@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão de Votos — Painel Jaboatão dos Guararapes</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js for visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Leaflet CSS & JS for Jaboatão Map & Heatmap -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <!-- Inter & Merriweather Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            serif: ['Merriweather', 'serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f4f9',
+              100: '#d9e2ec',
+              500: '#1d3a63',
+              800: '#12233f',
+              900: '#0a1526',
+            },
+            gold: {
+              400: '#d9a64c',
+              500: '#b8862b',
+              600: '#966a1e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    
+    .card-accent::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      border-radius: 8px 0 0 8px;
+    }
+
+    #jaboataoMap {
+      min-height: 480px;
+      z-index: 1;
+      border-radius: 0.75rem;
+    }
+    
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; color: black !important; padding: 0 !important; }
+      .print-shadow-none { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+    }
+  </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col font-sans antialiased selection:bg-brand-500 selection:text-white">
+
+  <header class="bg-brand-800 text-white sticky top-0 z-30 shadow-lg no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-gold-500 to-amber-300 flex items-center justify-center text-brand-900 font-black shadow-md">
+          <i class="fa-solid fa-check-to-slot text-xl"></i>
+        </div>
+        <div>
+          <div class="text-[10px] tracking-widest uppercase font-bold text-gold-400">Eleições & Estratégia • Jaboatão dos Guararapes</div>
+          <h1 class="font-serif text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            Gestão de Votos
+            <span class="text-xs font-sans font-normal px-2 py-0.5 rounded-full bg-brand-900 text-slate-300 border border-brand-500">Lideranças, Bairros & Mapa de Calor</span>
+          </h1>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        <span id="saveIndicator" class="text-xs text-emerald-400 font-medium px-2.5 py-1 rounded-full bg-emerald-950/50 border border-emerald-800/50 flex items-center gap-1.5 transition-all">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sincronizado
+        </span>
+
+        <button onclick="exportData()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-600 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-download"></i> Exportar JSON
+        </button>
+
+        <button onclick="triggerImport()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-600 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-upload"></i> Importar
+        </button>
+        <input type="file" id="importInput" accept=".json" class="hidden" onchange="importData(event)">
+
+        <button onclick="window.print()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gold-500 hover:bg-gold-600 text-brand-900 transition flex items-center gap-1.5 shadow">
+          <i class="fa-solid fa-print"></i> Relatório
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    
+    <!-- Navigation & Subhead -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4 no-print">
+      <div>
+        <p class="text-xs sm:text-sm text-slate-500">Mapeamento territorial de Jaboatão dos Guararapes: <strong>bairros</strong>, <strong>votos certos</strong>, <strong>locais e datas de reuniões</strong> e <strong>mapa de calor</strong>.</p>
+      </div>
+      <div class="flex items-center bg-slate-200/80 p-1 rounded-xl gap-1 self-start md:self-auto text-xs font-medium text-slate-600 flex-wrap">
+        <button id="tabNav-dashboard" onclick="switchTab('dashboard')" class="px-3 py-1.5 rounded-lg transition bg-white text-brand-800 shadow font-semibold flex items-center gap-1.5">
+          <i class="fa-solid fa-chart-pie"></i> Visão Geral
+        </button>
+        <button id="tabNav-heatmap" onclick="switchTab('heatmap')" class="px-3 py-1.5 rounded-lg transition hover:text-brand-800 flex items-center gap-1.5">
+          <i class="fa-solid fa-fire text-amber-500"></i> Mapa de Calor (Jaboatão)
+        </button>
+        <button id="tabNav-table" onclick="switchTab('table')" class="px-3 py-1.5 rounded-lg transition hover:text-brand-800 flex items-center gap-1.5">
+          <i class="fa-solid fa-users"></i> Lideranças (<span id="tabLeaderCount">0</span>)
+        </button>
+        <button id="tabNav-meetings" onclick="switchTab('meetings')" class="px-3 py-1.5 rounded-lg transition hover:text-brand-800 flex items-center gap-1.5">
+          <i class="fa-solid fa-calendar-days"></i> Agenda de Reuniões
+        </button>
+        <button id="tabNav-coordinators" onclick="switchTab('coordinators')" class="px-3 py-1.5 rounded-lg transition hover:text-brand-800 flex items-center gap-1.5">
+          <i class="fa-solid fa-sitemap"></i> Coordenadores
+        </button>
+      </div>
+    </div>
+
+    <!-- Summary KPI Cards -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      <!-- Total Leaders -->
+      <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm relative overflow-hidden card-accent before:bg-slate-700">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lideranças</span>
+        <div class="text-2xl font-bold text-slate-800 mt-1" id="kpiTotalLid">0</div>
+        <span class="text-[11px] text-slate-500 mt-0.5 block truncate"><i class="fa-solid fa-user-group text-slate-400"></i> Cadastradas</span>
+      </div>
+
+      <!-- Promised Votes -->
+      <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm relative overflow-hidden card-accent before:bg-amber-400">
+        <span class="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Prometidos</span>
+        <div class="text-2xl font-bold text-slate-800 mt-1" id="kpiPrometidos">0</div>
+        <span class="text-[11px] text-amber-600/80 mt-0.5 block truncate"><i class="fa-solid fa-bullseye"></i> Expectativa</span>
+      </div>
+
+      <!-- Certain Votes (Votos Certos) -->
+      <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm relative overflow-hidden card-accent before:bg-blue-600 bg-blue-50/20">
+        <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Votos Certos</span>
+        <div class="text-2xl font-bold text-blue-700 mt-1" id="kpiCertos">0</div>
+        <span class="text-[11px] text-blue-600/90 mt-0.5 block truncate"><i class="fa-solid fa-thumbs-up"></i> Mapeados</span>
+      </div>
+
+      <!-- Confirmed Votes -->
+      <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm relative overflow-hidden card-accent before:bg-emerald-500 bg-emerald-50/30">
+        <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Confirmados</span>
+        <div class="text-2xl font-bold text-emerald-700 mt-1" id="kpiConfirmados">0</div>
+        <span class="text-[11px] text-emerald-600 mt-0.5 block truncate"><i class="fa-solid fa-circle-check"></i> Garantidos</span>
+      </div>
+
+      <!-- Meetings Count -->
+      <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm relative overflow-hidden card-accent before:bg-indigo-500">
+        <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Qtd. Reuniões</span>
+        <div class="text-2xl font-bold text-slate-800 mt-1" id="kpiReunioes">0</div>
+        <span class="text-[11px] text-indigo-600/80 mt-0.5 block truncate"><i class="fa-solid fa-calendar-check"></i> Marcadas</span>
+      </div>
+
+      <!-- People Reached -->
+      <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm relative overflow-hidden card-accent before:bg-teal-500">
+        <span class="text-[10px] font-bold text-teal-600 uppercase tracking-wider block">Pessoas Presentes</span>
+        <div class="text-2xl font-bold text-slate-800 mt-1" id="kpiPessoas">0</div>
+        <span class="text-[11px] text-teal-600/80 mt-0.5 block truncate"><i class="fa-solid fa-users"></i> Em reuniões</span>
+      </div>
+
+      <!-- Total Bairros Jaboatão -->
+      <div class="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm relative overflow-hidden card-accent before:bg-purple-500 col-span-2 sm:col-span-1">
+        <span class="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Bairros Jaboatão</span>
+        <div class="text-2xl font-bold text-slate-800 mt-1" id="kpiBairros">0</div>
+        <span class="text-[11px] text-purple-600/80 mt-0.5 block truncate"><i class="fa-solid fa-map-location-dot"></i> Atendidos</span>
+      </div>
+    </section>
+
+    <div id="view-dashboard" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Top Leaders Chart -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm lg:col-span-2 flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="font-serif text-lg font-bold text-brand-800">Top Lideranças em Votos Certos & Confirmados</h2>
+              <p class="text-xs text-slate-500">Lideranças com maior densidade de apoio em Jaboatão dos Guararapes</p>
+            </div>
+            <span class="text-xs font-medium px-2.5 py-1 rounded-lg bg-brand-50 text-brand-800 border border-brand-100">
+              <i class="fa-solid fa-trophy text-amber-500 mr-1"></i> Desempenho
+            </span>
+          </div>
+
+          <div class="space-y-3.5" id="topChart">
+            <!-- Dynamic Content -->
+          </div>
+          <div id="topEmpty" class="text-center py-12 text-slate-400 text-sm hidden">
+            <i class="fa-solid fa-chart-bar text-3xl mb-2 block opacity-50"></i>
+            Nenhuma liderança cadastrada para exibir gráficos.
+          </div>
+        </div>
+
+        <!-- Neighborhood Breakdown Jaboatão -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="font-serif text-lg font-bold text-brand-800">Bairros de Jaboatão</h2>
+              <p class="text-xs text-slate-500">Distribuição dos votos certos por região</p>
+            </div>
+            <button onclick="switchTab('heatmap')" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200 transition">
+              <i class="fa-solid fa-fire text-amber-500 mr-1"></i> Ver no Mapa
+            </button>
+          </div>
+
+          <div class="space-y-3 flex-1 overflow-y-auto max-h-[340px] pr-1" id="regionChart">
+            <!-- Dynamic Content -->
+          </div>
+          <div id="regionEmpty" class="text-center py-12 text-slate-400 text-sm hidden">
+            <i class="fa-solid fa-map-location-dot text-3xl mb-2 block opacity-50"></i>
+            Cadastre o bairro de Jaboatão nas lideranças para visualizar.
+          </div>
+        </div>
+      </div>
+
+      <!-- Funnel Conversion Progress -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+          <h3 class="font-serif text-base font-bold text-brand-800 mb-1">Status da Base de Lideranças</h3>
+          <p class="text-xs text-slate-500 mb-4">Proporção por engajamento</p>
+          <div class="h-48 relative flex items-center justify-center">
+            <canvas id="statusPieChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between md:col-span-2">
+          <div>
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="font-serif text-base font-bold text-brand-800">Funil de Conversão de Votos</h3>
+                <p class="text-xs text-slate-500">Comparação entre Votos Prometidos &rarr; Votos Certos &rarr; Confirmados</p>
+              </div>
+              <div class="text-right">
+                <span class="text-2xl font-bold text-brand-800" id="funnelCertPct">0%</span>
+                <span class="text-xs text-slate-500 block">taxa de Votos Certos</span>
+              </div>
+            </div>
+
+            <div class="mt-6 space-y-4">
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1">
+                  <span class="text-amber-700">1. Votos Prometidos</span>
+                  <span id="funnelPromText" class="text-slate-600">0</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3">
+                  <div id="funnelPromBar" class="bg-amber-400 h-3 rounded-full transition-all duration-500" style="width: 100%"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1">
+                  <span class="text-blue-700">2. Votos Certos Trazidos</span>
+                  <span id="funnelCertText" class="text-slate-600">0</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3">
+                  <div id="funnelCertBar" class="bg-blue-600 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1">
+                  <span class="text-emerald-700">3. Votos Confirmados</span>
+                  <span id="funnelConfText" class="text-slate-600">0</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3">
+                  <div id="funnelConfBar" class="bg-emerald-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span><i class="fa-solid fa-circle-info text-brand-500 mr-1"></i> Acompanhe os bairros em Jaboatão para concentrar a agenda de reuniões.</span>
+            <button onclick="switchTab('table')" class="text-brand-800 font-semibold hover:underline">Ver Tabela Completa &rarr;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-heatmap" class="space-y-4 hidden">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4 border-b border-slate-100 pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-xs">
+                <i class="fa-solid fa-fire mr-1"></i> Mapa de Calor Em Tempo Real
+              </span>
+              <span class="text-xs text-slate-400">• Jaboatão dos Guararapes / PE</span>
+            </div>
+            <h2 class="font-serif text-xl font-bold text-brand-800 mt-1">Densidade de Votos por Bairro & Localização</h2>
+            <p class="text-xs text-slate-500">Visualização geográfica da intensidade de apoio eleitoral em Piedade, Candeias, Prazeres, Cavaleiro, Curado, Centro, etc.</p>
+          </div>
+
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="flex items-center gap-1.5 text-xs bg-slate-100 p-1 rounded-xl">
+              <span class="font-semibold px-2 text-slate-600">Métrica:</span>
+              <button id="mapMetric-certos" onclick="setMapMetric('certos')" class="px-2.5 py-1 rounded-lg bg-white shadow font-bold text-blue-700">
+                Votos Certos
+              </button>
+              <button id="mapMetric-confirmados" onclick="setMapMetric('confirmados')" class="px-2.5 py-1 rounded-lg hover:bg-slate-200 text-slate-600 font-medium">
+                Confirmados
+              </button>
+              <button id="mapMetric-prometidos" onclick="setMapMetric('prometidos')" class="px-2.5 py-1 rounded-lg hover:bg-slate-200 text-slate-600 font-medium">
+                Prometidos
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button onclick="toggleMapLayer('heat')" id="btnToggleHeat" class="px-3 py-1.5 rounded-xl bg-amber-500 text-brand-900 font-bold text-xs hover:bg-amber-400 transition shadow">
+                <i class="fa-solid fa-fire"></i> Calor
+              </button>
+              <button onclick="toggleMapLayer('markers')" id="btnToggleMarkers" class="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs hover:bg-slate-200 transition">
+                <i class="fa-solid fa-location-dot"></i> Marcadores
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-inner">
+          <div id="jaboataoMap"></div>
+
+          <!-- Floating Legend -->
+          <div class="absolute bottom-4 right-4 z-[1000] bg-white/95 backdrop-blur-sm p-3 rounded-xl border border-slate-200 shadow-lg text-xs space-y-2 max-w-xs">
+            <div class="font-bold text-slate-800 flex items-center justify-between">
+              <span>Intensidade de Votos</span>
+              <i class="fa-solid fa-layer-group text-slate-400"></i>
+            </div>
+            <div class="h-3 w-full rounded-full bg-gradient-to-r from-blue-500 via-lime-400 via-amber-400 to-red-600"></div>
+            <div class="flex justify-between text-[10px] text-slate-500 font-medium">
+              <span>Baixa Concentração</span>
+              <span>Alta Concentração</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
+          <span><i class="fa-solid fa-compass text-brand-500 mr-1"></i> O mapa calcula e atualiza o calor automaticamente quando você adiciona ou altera o bairro da liderança.</span>
+          <span class="font-semibold text-slate-700" id="mapPointsSummary">0 bairros mapeados em Jaboatão</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-table" class="space-y-4 hidden">
+      <!-- Toolbar & Filters -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between no-print">
+        <div class="flex flex-1 flex-col sm:flex-row gap-2.5">
+          <!-- Search box -->
+          <div class="relative flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input type="text" id="searchBox" placeholder="Buscar por nome, bairro de Jaboatão, coordenador, local ou telefone..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none transition">
+          </div>
+
+          <!-- Bairro Filter -->
+          <select id="bairroFilter" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none max-w-[170px]">
+            <option value="">Todos os Bairros</option>
+          </select>
+
+          <!-- Status Filter -->
+          <select id="statusFilter" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <option value="">Todos os Status</option>
+            <option value="Ativo">Ativo</option>
+            <option value="Confirmado">Confirmado</option>
+            <option value="Pendente">Pendente</option>
+            <option value="Cancelado">Cancelado</option>
+          </select>
+
+          <!-- Priority Filter -->
+          <select id="prioridadeFilter" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <option value="">Todas Prioridades</option>
+            <option value="Alta">Alta Prioridade</option>
+            <option value="Média">Média Prioridade</option>
+            <option value="Baixa">Baixa Prioridade</option>
+          </select>
+        </div>
+
+        <button onclick="openLeaderModal()" class="px-4 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 shadow hover:shadow-md">
+          <i class="fa-solid fa-plus"></i> Nova Liderança
+        </button>
+      </div>
+
+      <!-- Main Data Table Container -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print-shadow-none">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-brand-900 font-bold uppercase tracking-wider select-none">
+                <th class="p-3 cursor-pointer hover:text-gold-600 transition" onclick="sortBy('nome')">
+                  Liderança <i class="fa-solid fa-sort text-slate-300 ml-1"></i>
+                </th>
+                <th class="p-3 cursor-pointer hover:text-gold-600 transition" onclick="sortBy('bairro')">
+                  Bairro da Liderança <i class="fa-solid fa-sort text-slate-300 ml-1"></i>
+                </th>
+                <th class="p-3 cursor-pointer hover:text-gold-600 transition" onclick="sortBy('coordenador')">
+                  Coordenador <i class="fa-solid fa-sort text-slate-300 ml-1"></i>
+                </th>
+                <th class="p-3">Contato / Whats</th>
+                <th class="p-3 text-right cursor-pointer hover:text-gold-600 transition" onclick="sortBy('prometidos')">
+                  Prom. <i class="fa-solid fa-sort text-slate-300 ml-0.5"></i>
+                </th>
+                <th class="p-3 text-right cursor-pointer hover:text-gold-600 transition bg-blue-50/50 text-blue-900" onclick="sortBy('certos')">
+                  Votos Certos <i class="fa-solid fa-sort text-slate-300 ml-0.5"></i>
+                </th>
+                <th class="p-3 text-right cursor-pointer hover:text-gold-600 transition" onclick="sortBy('confirmados')">
+                  Conf. <i class="fa-solid fa-sort text-slate-300 ml-0.5"></i>
+                </th>
+                <th class="p-3 text-center cursor-pointer hover:text-gold-600 transition" onclick="sortBy('reunioesCount')">
+                  Qtd. Reuniões <i class="fa-solid fa-sort text-slate-300 ml-0.5"></i>
+                </th>
+                <th class="p-3 text-right cursor-pointer hover:text-gold-600 transition" onclick="sortBy('pessoasTotal')">
+                  Pessoas Presentes <i class="fa-solid fa-sort text-slate-300 ml-0.5"></i>
+                </th>
+                <th class="p-3 text-center">Último Local & Data</th>
+                <th class="p-3 text-center cursor-pointer hover:text-gold-600 transition" onclick="sortBy('status')">
+                  Status <i class="fa-solid fa-sort text-slate-300 ml-0.5"></i>
+                </th>
+                <th class="p-3 text-center no-print">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-slate-100 font-medium text-slate-700">
+              <!-- Dynamic Rows -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="emptyState" class="text-center py-16 px-4 hidden">
+          <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+            <i class="fa-solid fa-user-slash text-2xl"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-700 font-serif">Nenhuma liderança cadastrada</h3>
+          <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Adicione uma nova liderança informando o bairro de Jaboatão e a quantidade de votos certos.</p>
+          <button onclick="openLeaderModal()" class="mt-4 px-4 py-2 bg-brand-800 text-white rounded-xl text-xs font-semibold hover:bg-brand-900 transition">
+            + Cadastrar Liderança
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-meetings" class="space-y-6 hidden">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="font-serif text-lg font-bold text-brand-800">Agenda Geral de Reuniões em Jaboatão</h2>
+            <p class="text-xs text-slate-500">Lista completa com <strong>data da reunião</strong>, <strong>local da reunião</strong>, <strong>número de pessoas</strong> e <strong>bairro da liderança</strong></p>
+          </div>
+          <div class="text-xs font-medium px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-100 flex items-center gap-2">
+            <i class="fa-solid fa-calendar-check text-indigo-600"></i>
+            <span id="meetingsTotalBadge">0 Reuniões registradas</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-brand-900 font-bold uppercase tracking-wider">
+                <th class="p-3">Data da Reunião</th>
+                <th class="p-3">Local da Reunião</th>
+                <th class="p-3">Liderança Responsável</th>
+                <th class="p-3">Bairro em Jaboatão</th>
+                <th class="p-3 text-right">Nº de Pessoas</th>
+                <th class="p-3 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="meetingsListBody" class="divide-y divide-slate-100 font-medium text-slate-700">
+              <!-- Dynamic Rows -->
+            </tbody>
+          </table>
+        </div>
+        <div id="meetingsListEmpty" class="text-center py-12 text-slate-400 text-sm hidden">
+          <i class="fa-solid fa-calendar-xmark text-3xl mb-2 block opacity-50"></i>
+          Nenhuma reunião registrada ainda. Cadastre reuniões nas lideranças.
+        </div>
+      </div>
+    </div>
+
+    <div id="view-coordinators" class="space-y-6 hidden">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="mb-4">
+          <h2 class="font-serif text-lg font-bold text-brand-800">Desempenho por Coordenador em Jaboatão</h2>
+          <p class="text-xs text-slate-500">Acompanhe quem coordena as lideranças, os bairros atendidos e os votos certos trazidos</p>
+        </div>
+
+        <div id="coordinatorsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dynamic Cards -->
+        </div>
+        <div id="coordinatorsEmpty" class="text-center py-12 text-slate-400 text-sm hidden">
+          Nenhum coordenador registrado ainda. Atribua coordenadores às lideranças.
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="leaderModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 transform transition-all max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <h3 id="leaderModalTitle" class="font-serif text-lg font-bold text-brand-800">Nova Liderança</h3>
+        <button onclick="closeLeaderModal()" class="text-slate-400 hover:text-slate-600 transition p-1 text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="leaderForm" onsubmit="saveLeaderForm(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="formLeaderId">
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Nome da Liderança *</label>
+          <input type="text" id="formNome" required placeholder="Ex: Maria Silva" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Bairro de Jaboatão *</label>
+            <input type="text" id="formBairro" required placeholder="Ex: Piedade, Candeias, Cavaleiro..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Coordenador Resp.</label>
+            <input type="text" id="formCoordenador" placeholder="Ex: Carlos Santos" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Telefone / WhatsApp</label>
+          <input type="text" id="formTelefone" placeholder="Ex: (81) 98888-7777" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none">
+        </div>
+
+        <!-- Numbers Box -->
+        <div class="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+          <div>
+            <label class="block font-semibold text-amber-700 mb-1">Votos Prometidos</label>
+            <input type="number" id="formPrometidos" min="0" value="0" class="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-right font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-semibold text-blue-700 mb-1">Votos Certos *</label>
+            <input type="number" id="formCertos" min="0" value="0" class="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" title="Votos certos trazidos por esta liderança">
+          </div>
+          <div>
+            <label class="block font-semibold text-emerald-700 mb-1">Confirmados</label>
+            <input type="number" id="formConfirmados" min="0" value="0" class="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-right font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Prioridade</label>
+            <select id="formPrioridade" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <option value="Média">Média Prioridade</option>
+              <option value="Alta">Alta Prioridade</option>
+              <option value="Baixa">Baixa Prioridade</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Status</label>
+            <select id="formStatus" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <option value="Ativo">Ativo</option>
+              <option value="Confirmado">Confirmado</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Cancelado">Cancelado</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Observações / Anotações</label>
+          <textarea id="formObservacao" rows="2" placeholder="Pontos fortes, demandas do bairro..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeLeaderModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-4 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-xl font-semibold transition shadow">
+            Salvar Liderança
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="meetingsModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 transform transition-all max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div>
+          <div class="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">Gestão de Reuniões de Liderança</div>
+          <h3 id="meetingsModalLeaderName" class="font-serif text-lg font-bold text-brand-800">Reuniões da Liderança</h3>
+        </div>
+        <button onclick="closeMeetingsModal()" class="text-slate-400 hover:text-slate-600 transition p-1 text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto pr-1">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-brand-900 font-bold uppercase">
+              <th class="p-2.5">Data da Reunião</th>
+              <th class="p-2.5">Local / Endereço da Reunião</th>
+              <th class="p-2.5 text-right">Pessoas Presentes</th>
+              <th class="p-2.5 text-center">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="meetingsModalBody" class="divide-y divide-slate-100">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+        <div id="meetingsModalEmpty" class="text-center py-8 text-slate-400 text-xs hidden">
+          Nenhuma reunião agendada para esta liderança ainda. Clique no botão abaixo para adicionar.
+        </div>
+      </div>
+
+      <div class="pt-4 border-t border-slate-100 mt-3 flex items-center justify-between">
+        <button onclick="addMeetingRow()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-xl text-xs transition border border-indigo-200 flex items-center gap-1.5">
+          <i class="fa-solid fa-plus"></i> + Nova Reunião
+        </button>
+        <div id="meetingsModalSummary" class="text-xs font-semibold text-slate-600">
+          Total: 0 reuniões • 0 pessoas
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="messageModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 text-center">
+      <div id="msgModalIcon" class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3 text-xl">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3 id="msgModalTitle" class="font-serif text-base font-bold text-slate-800 mb-1">Aviso</h3>
+      <p id="msgModalBody" class="text-xs text-slate-600 mb-5">Mensagem do sistema</p>
+      <div class="flex gap-2 justify-center" id="msgModalButtons">
+        <button onclick="closeMsgModal()" class="px-4 py-2 bg-brand-800 text-white font-semibold rounded-xl text-xs hover:bg-brand-900 transition">
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // LocalStorage Key
+    const STORAGE_KEY = 'jaboatao_votos_liderancas_v3';
+
+    // Core Data State
+    let leadersData = [];
+    let currentTab = 'dashboard';
+    let currentSortKey = 'certos';
+    let currentSortDir = -1; // Descending default
+    let activeMeetingLeaderId = null;
+
+    // Leaflet Map & Heatmap state
+    let map = null;
+    let heatLayer = null;
+    let markersGroup = null;
+    let currentMapMetric = 'certos'; // 'certos', 'confirmados', 'prometidos'
+    let currentMapLayer = 'heat'; // 'heat' or 'markers'
+
+    // Status Pie Chart instance
+    let statusChartInstance = null;
+
+    // Jaboatão dos Guararapes Neighborhood Coordinates Lookup
+    const JABOATAO_NEIGHBORHOODS = {
+      'piedade': { lat: -8.1718, lng: -34.9032, name: 'Piedade' },
+      'candeias': { lat: -8.1983, lng: -34.9192, name: 'Candeias' },
+      'barra de jangada': { lat: -8.2251, lng: -34.9284, name: 'Barra de Jangada' },
+      'prazeres': { lat: -8.1563, lng: -34.9205, name: 'Prazeres' },
+      'cajueiro seco': { lat: -8.1634, lng: -34.9291, name: 'Cajueiro Seco' },
+      'guararapes': { lat: -8.1402, lng: -34.9183, name: 'Guararapes' },
+      'jaboatao centro': { lat: -8.1126, lng: -35.0148, name: 'Jaboatão Centro' },
+      'jaboatão centro': { lat: -8.1126, lng: -35.0148, name: 'Jaboatão Centro' },
+      'centro': { lat: -8.1126, lng: -35.0148, name: 'Jaboatão Centro' },
+      'santo aleixo': { lat: -8.1189, lng: -35.0195, name: 'Santo Aleixo' },
+      'vila rica': { lat: -8.1250, lng: -35.0230, name: 'Vila Rica' },
+      'engenho velho': { lat: -8.1065, lng: -35.0080, name: 'Engenho Velho' },
+      'socorro': { lat: -8.0980, lng: -34.9920, name: 'Socorro' },
+      'cavaleiro': { lat: -8.0935, lng: -34.9752, name: 'Cavaleiro' },
+      'zumbi do pacheco': { lat: -8.1082, lng: -34.9821, name: 'Zumbi do Pacheco' },
+      'curado': { lat: -8.0821, lng: -34.9650, name: 'Curado' },
+      'curado i': { lat: -8.0850, lng: -34.9620, name: 'Curado I' },
+      'curado ii': { lat: -8.0820, lng: -34.9650, name: 'Curado II' },
+      'curado iii': { lat: -8.0790, lng: -34.9680, name: 'Curado III' },
+      'curado iv': { lat: -8.0760, lng: -34.9710, name: 'Curado IV' },
+      'curado v': { lat: -8.0730, lng: -34.9740, name: 'Curado V' },
+      'muribeca': { lat: -8.1884, lng: -34.9602, name: 'Muribeca' },
+      'marcos freire': { lat: -8.1750, lng: -34.9520, name: 'Marcos Freire' },
+      'sucupira': { lat: -8.1150, lng: -34.9780, name: 'Sucupira' },
+      'manassu': { lat: -8.1300, lng: -35.0300, name: 'Manassu' },
+      'gurabu': { lat: -8.1500, lng: -34.9350, name: 'Gurabu' },
+      'loteamento 92': { lat: -8.1680, lng: -34.9380, name: 'Loteamento 92' },
+      'comportas': { lat: -8.2100, lng: -34.9500, name: 'Comportas' }
+    };
+
+    // Helper for UID
+    function generateId() {
+      return 'lid_' + Math.random().toString(36).substring(2, 9);
+    }
+
+    // Helper to sanitize HTML strings
+    function sanitize(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    window.onload = function() {
+      loadData();
+      setupEventListeners();
+    };
+
+    function loadData() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          leadersData = JSON.parse(stored);
+        } else {
+          // Initialize with clean realistic Jaboatão sample base if empty
+          leadersData = getInitialJaboataoBase();
+          saveData(false);
+        }
+      } catch (e) {
+        console.error("Error loading localStorage:", e);
+        leadersData = getInitialJaboataoBase();
+      }
+
+      // Guarantee proper structure
+      leadersData.forEach(item => {
+        if (!Array.isArray(item.reunioes)) item.reunioes = [];
+        item.prometidos = parseInt(item.prometidos) || 0;
+        item.certos = parseInt(item.certos) || 0;
+        item.confirmados = parseInt(item.confirmados) || 0;
+      });
+
+      renderAllViews();
+    }
+
+    function saveData(showIndicator = true) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(leadersData));
+        if (showIndicator) {
+          const ind = document.getElementById('saveIndicator');
+          ind.classList.remove('opacity-0');
+          setTimeout(() => ind.classList.add('opacity-0'), 1500);
+        }
+      } catch (e) {
+        console.error("Save error:", e);
+      }
+    }
+
+    function getInitialJaboataoBase() {
+      return [
+        {
+          id: generateId(),
+          nome: "Dra. Renata Vasconcelos",
+          bairro: "Piedade",
+          coordenador: "Marcos Lima",
+          telefone: "(81) 99123-4455",
+          prometidos: 120,
+          certos: 95,
+          confirmados: 88,
+          prioridade: "Alta",
+          status: "Confirmado",
+          observacao: "Liderança de saúde e associação de moradores de Piedade.",
+          reunioes: [
+            { data: "2026-07-15", local: "Assoc. Moradores - Av. Bernardo Vieira", pessoas: 45 },
+            { data: "2026-07-22", local: "Clube Beira Mar - Piedade", pessoas: 50 }
+          ]
+        },
+        {
+          id: generateId(),
+          nome: "Seu Antonio do Comercio",
+          bairro: "Prazeres",
+          coordenador: "Marcos Lima",
+          telefone: "(81) 98765-1122",
+          prometidos: 85,
+          certos: 70,
+          confirmados: 65,
+          prioridade: "Alta",
+          status: "Ativo",
+          observacao: "Comerciante central do mercado de Prazeres.",
+          reunioes: [
+            { data: "2026-07-10", local: "Rua do Mercado, Prazeres", pessoas: 35 }
+          ]
+        },
+        {
+          id: generateId(),
+          nome: "Prof. Henrique Costa",
+          bairro: "Cavaleiro",
+          coordenador: "Luciana Alves",
+          telefone: "(81) 98844-3322",
+          prometidos: 110,
+          certos: 80,
+          confirmados: 75,
+          prioridade: "Alta",
+          status: "Ativo",
+          observacao: "Professor da rede estadual e liderança jovem em Cavaleiro.",
+          reunioes: [
+            { data: "2026-07-18", local: "Escola Comunitária de Cavaleiro", pessoas: 60 }
+          ]
+        },
+        {
+          id: generateId(),
+          nome: "Cláudia das Candeias",
+          bairro: "Candeias",
+          coordenador: "Marcos Lima",
+          telefone: "(81) 99655-8899",
+          prometidos: 90,
+          certos: 65,
+          confirmados: 58,
+          prioridade: "Média",
+          status: "Ativo",
+          observacao: "Organiza reuniões de condomínios da orla de Candeias.",
+          reunioes: [
+            { data: "2026-07-20", local: "Auditório Condomínio Sol Nascente", pessoas: 40 }
+          ]
+        },
+        {
+          id: generateId(),
+          nome: "Pr. Fernando Gomes",
+          bairro: "Curado IV",
+          coordenador: "Luciana Alves",
+          telefone: "(81) 99788-0011",
+          prometidos: 140,
+          certos: 110,
+          confirmados: 102,
+          prioridade: "Alta",
+          status: "Confirmado",
+          observacao: "Liderança comunitária e religiosa no Curado IV.",
+          reunioes: [
+            { data: "2026-07-12", local: "Anexo Social - Curado IV", pessoas: 75 },
+            { data: "2026-07-25", local: "Praça Principal do Curado", pessoas: 65 }
+          ]
+        },
+        {
+          id: generateId(),
+          nome: "Roberto do Santo Aleixo",
+          bairro: "Jaboatão Centro",
+          coordenador: "Carlos Eduardo",
+          telefone: "(81) 98111-2233",
+          prometidos: 75,
+          certos: 50,
+          confirmados: 45,
+          prioridade: "Média",
+          status: "Ativo",
+          observacao: "Representante da associação rural e centro de Jaboatão.",
+          reunioes: [
+            { data: "2026-07-14", local: "Rua Barão de Lucena - Centro", pessoas: 30 }
+          ]
+        },
+        {
+          id: generateId(),
+          nome: "Dona Maria de Cajueiro",
+          bairro: "Cajueiro Seco",
+          coordenador: "Carlos Eduardo",
+          telefone: "(81) 99333-4411",
+          prometidos: 60,
+          certos: 48,
+          confirmados: 40,
+          prioridade: "Média",
+          status: "Ativo",
+          observacao: "Apoio de famílias em Cajueiro Seco próximo à estação.",
+          reunioes: [
+            { data: "2026-07-19", local: "Rua do Sol, Cajueiro Seco", pessoas: 28 }
+          ]
+        }
+      ];
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      const tabs = ['dashboard', 'heatmap', 'table', 'meetings', 'coordinators'];
+      
+      tabs.forEach(t => {
+        const viewEl = document.getElementById(`view-${t}`);
+        const navEl = document.getElementById(`tabNav-${t}`);
+        
+        if (t === tab) {
+          viewEl.classList.remove('hidden');
+          navEl.className = "px-3 py-1.5 rounded-lg transition bg-white text-brand-800 shadow font-semibold flex items-center gap-1.5";
+        } else {
+          viewEl.classList.add('hidden');
+          navEl.className = "px-3 py-1.5 rounded-lg transition hover:text-brand-800 flex items-center gap-1.5 text-slate-600";
+        }
+      });
+
+      if (tab === 'heatmap') {
+        setTimeout(() => {
+          initOrUpdateJaboataoMap();
+        }, 150);
+      }
+    }
+
+    function renderAllViews() {
+      updateKPIs();
+      renderTopLeadersChart();
+      renderNeighborhoodBreakdown();
+      renderStatusPieChart();
+      renderTable();
+      renderMeetingsList();
+      renderCoordinators();
+      populateBairroDropdown();
+      document.getElementById('tabLeaderCount').textContent = leadersData.length;
+
+      if (currentTab === 'heatmap' && map) {
+        updateHeatmapData();
+      }
+    }
+
+    function getPeopleTotal(leader) {
+      if (!leader.reunioes || !Array.isArray(leader.reunioes)) return 0;
+      return leader.reunioes.reduce((sum, m) => sum + (parseInt(m.pessoas) || 0), 0);
+    }
+
+    function updateKPIs() {
+      const totalLid = leadersData.length;
+      const totalProm = leadersData.reduce((s, d) => s + (d.prometidos || 0), 0);
+      const totalCertos = leadersData.reduce((s, d) => s + (d.certos || 0), 0);
+      const totalConf = leadersData.reduce((s, d) => s + (d.confirmados || 0), 0);
+      const totalReunioes = leadersData.reduce((s, d) => s + ((d.reunioes || []).length), 0);
+      const totalPessoas = leadersData.reduce((s, d) => s + getPeopleTotal(d), 0);
+      
+      const bairrosSet = new Set(leadersData.map(d => (d.bairro || '').trim().toLowerCase()).filter(Boolean));
+
+      document.getElementById('kpiTotalLid').textContent = totalLid.toLocaleString('pt-BR');
+      document.getElementById('kpiPrometidos').textContent = totalProm.toLocaleString('pt-BR');
+      document.getElementById('kpiCertos').textContent = totalCertos.toLocaleString('pt-BR');
+      document.getElementById('kpiConfirmados').textContent = totalConf.toLocaleString('pt-BR');
+      document.getElementById('kpiReunioes').textContent = totalReunioes.toLocaleString('pt-BR');
+      document.getElementById('kpiPessoas').textContent = totalPessoas.toLocaleString('pt-BR');
+      document.getElementById('kpiBairros').textContent = bairrosSet.size;
+
+      // Funnel percentages
+      const certosPct = totalProm > 0 ? Math.min(100, Math.round((totalCertos / totalProm) * 100)) : 0;
+      const confPct = totalProm > 0 ? Math.min(100, Math.round((totalConf / totalProm) * 100)) : 0;
+
+      document.getElementById('funnelCertPct').textContent = certosPct + '%';
+      document.getElementById('funnelPromText').textContent = `${totalProm.toLocaleString('pt-BR')} votos`;
+      document.getElementById('funnelCertText').textContent = `${totalCertos.toLocaleString('pt-BR')} votos (${certosPct}%)`;
+      document.getElementById('funnelConfText').textContent = `${totalConf.toLocaleString('pt-BR')} votos (${confPct}%)`;
+
+      document.getElementById('funnelCertBar').style.width = certosPct + '%';
+      document.getElementById('funnelConfBar').style.width = confPct + '%';
+    }
+
+    function renderTopLeadersChart() {
+      const topContainer = document.getElementById('topChart');
+      const topEmpty = document.getElementById('topEmpty');
+
+      const sorted = [...leadersData]
+        .sort((a, b) => (b.certos || 0) - (a.certos || 0))
+        .slice(0, 6);
+
+      if (sorted.length === 0) {
+        topContainer.innerHTML = '';
+        topEmpty.classList.remove('hidden');
+        return;
+      }
+
+      topEmpty.classList.add('hidden');
+      const maxVal = Math.max(...sorted.map(s => s.certos || 0), 1);
+
+      topContainer.innerHTML = sorted.map(item => {
+        const pct = Math.min(100, Math.round(((item.certos || 0) / maxVal) * 100));
+        return `
+          <div>
+            <div class="flex justify-between items-center text-xs mb-1 font-semibold">
+              <span class="text-brand-900 font-bold">${sanitize(item.nome)} <span class="font-normal text-slate-400">(${sanitize(item.bairro || 'Jaboatão')})</span></span>
+              <span class="text-blue-700 font-bold">${(item.certos || 0).toLocaleString('pt-BR')} <span class="text-[10px] text-slate-400 font-normal">votos certos</span></span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden flex">
+              <div class="bg-gradient-to-r from-blue-600 to-indigo-600 h-2.5 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderNeighborhoodBreakdown() {
+      const regionContainer = document.getElementById('regionChart');
+      const regionEmpty = document.getElementById('regionEmpty');
+
+      const counts = {};
+      leadersData.forEach(d => {
+        const b = (d.bairro || '').trim();
+        if (!b) return;
+        counts[b] = (counts[b] || 0) + (d.certos || 0);
+      });
+
+      const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+      if (entries.length === 0) {
+        regionContainer.innerHTML = '';
+        regionEmpty.classList.remove('hidden');
+        return;
+      }
+
+      regionEmpty.classList.add('hidden');
+      const maxVal = Math.max(...entries.map(e => e[1]), 1);
+
+      regionContainer.innerHTML = entries.map(([bairro, total]) => {
+        const pct = Math.min(100, Math.round((total / maxVal) * 100));
+        return `
+          <div class="space-y-1">
+            <div class="flex justify-between items-center text-xs">
+              <span class="font-semibold text-slate-700 truncate max-w-[150px]">${sanitize(bairro)}</span>
+              <span class="font-bold text-slate-900">${total.toLocaleString('pt-BR')} <span class="text-[10px] font-normal text-slate-400">certos</span></span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <div class="bg-purple-600 h-2 rounded-full transition-all" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderStatusPieChart() {
+      const ctx = document.getElementById('statusPieChart');
+      if (!ctx) return;
+
+      const counts = { Ativo: 0, Confirmado: 0, Pendente: 0, Cancelado: 0 };
+      leadersData.forEach(d => {
+        const st = d.status || 'Ativo';
+        if (counts[st] !== undefined) counts[st]++;
+      });
+
+      if (statusChartInstance) {
+        statusChartInstance.destroy();
+      }
+
+      statusChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Ativo', 'Confirmado', 'Pendente', 'Cancelado'],
+          datasets: [{
+            data: [counts.Ativo, counts.Confirmado, counts.Pendente, counts.Cancelado],
+            backgroundColor: ['#1d3a63', '#10b981', '#f59e0b', '#ef4444'],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { font: { size: 10, family: 'Inter' }, boxWidth: 12 }
+            }
+          },
+          cutout: '65%'
+        }
+      });
+    }
+
+    function initOrUpdateJaboataoMap() {
+      if (!map) {
+        // Jaboatão dos Guararapes center coords: [-8.1500, -34.9500]
+        map = L.map('jaboataoMap').setView([-8.1500, -34.9500], 12);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+          attribution: '&copy; OpenStreetMap contributors • Jaboatão dos Guararapes'
+        }).addTo(map);
+
+        markersGroup = L.layerGroup().addTo(map);
+      }
+
+      updateHeatmapData();
+    }
+
+    function getCoordsForBairro(bairroName) {
+      if (!bairroName) return { lat: -8.1500, lng: -34.9500, name: 'Jaboatão Geral' };
+      const normalized = bairroName.trim().toLowerCase();
+
+      if (JABOATAO_NEIGHBORHOODS[normalized]) {
+        return JABOATAO_NEIGHBORHOODS[normalized];
+      }
+
+      // Fallback hash for unrecognized neighborhoods within Jaboatão bounding box
+      let hash = 0;
+      for (let i = 0; i < normalized.length; i++) {
+        hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const latOffset = ((hash % 100) / 1000) * 0.1;
+      const lngOffset = (((hash >> 2) % 100) / 1000) * 0.1;
+
+      return {
+        lat: -8.1300 + latOffset,
+        lng: -34.9600 + lngOffset,
+        name: bairroName
+      };
+    }
+
+    function updateHeatmapData() {
+      if (!map) return;
+
+      // Group metrics by neighborhood
+      const neighborhoodStats = {};
+
+      leadersData.forEach(item => {
+        const b = (item.bairro || 'Outros Jaboatão').trim();
+        if (!neighborhoodStats[b]) {
+          neighborhoodStats[b] = {
+            leaders: 0,
+            prometidos: 0,
+            certos: 0,
+            confirmados: 0,
+            reunioes: 0,
+            pessoas: 0,
+            leaderNames: []
+          };
+        }
+        neighborhoodStats[b].leaders += 1;
+        neighborhoodStats[b].prometidos += (item.prometidos || 0);
+        neighborhoodStats[b].certos += (item.certos || 0);
+        neighborhoodStats[b].confirmados += (item.confirmados || 0);
+        neighborhoodStats[b].reunioes += ((item.reunioes || []).length);
+        neighborhoodStats[b].pessoas += getPeopleTotal(item);
+        if (item.nome) neighborhoodStats[b].leaderNames.push(item.nome);
+      });
+
+      // Clear existing heat layer & markers
+      if (heatLayer) map.removeLayer(heatLayer);
+      markersGroup.clearLayers();
+
+      const heatPoints = [];
+      let totalMappedBairros = 0;
+
+      // Find max value for normalization
+      let maxVal = 1;
+      Object.values(neighborhoodStats).forEach(st => {
+        const val = st[currentMapMetric] || 0;
+        if (val > maxVal) maxVal = val;
+      });
+
+      Object.entries(neighborhoodStats).forEach(([bairroName, stats]) => {
+        const coords = getCoordsForBairro(bairroName);
+        const metricVal = stats[currentMapMetric] || 0;
+
+        if (metricVal > 0 || stats.leaders > 0) {
+          totalMappedBairros++;
+          // Normalized intensity between 0.2 and 1.0
+          const intensity = Math.max(0.2, Math.min(1.0, metricVal / maxVal));
+
+          // Multi-point jitter for higher intensity to create rich heat cloud
+          const numHeatPoints = Math.max(1, Math.min(15, Math.ceil(metricVal / 10)));
+          for (let i = 0; i < numHeatPoints; i++) {
+            const jitterLat = (Math.random() - 0.5) * 0.008;
+            const jitterLng = (Math.random() - 0.5) * 0.008;
+            heatPoints.push([coords.lat + jitterLat, coords.lng + jitterLng, intensity]);
+          }
+
+          // Create Marker with Popup
+          const popupContent = `
+            <div class="p-1 font-sans">
+              <div class="text-xs uppercase tracking-wider font-bold text-amber-600 mb-1">Bairro: ${sanitize(coords.name)}</div>
+              <div class="text-sm font-bold text-brand-900 border-b border-slate-200 pb-1.5 mb-2">
+                ${stats.leaders} Liderança(s) Cadastrada(s)
+              </div>
+              <div class="space-y-1 text-xs">
+                <div class="flex justify-between gap-4">
+                  <span class="text-slate-500">Votos Certos Trazidos:</span>
+                  <span class="font-bold text-blue-700">${stats.certos}</span>
+                </div>
+                <div class="flex justify-between gap-4">
+                  <span class="text-slate-500">Votos Confirmados:</span>
+                  <span class="font-bold text-emerald-700">${stats.confirmados}</span>
+                </div>
+                <div class="flex justify-between gap-4">
+                  <span class="text-slate-500">Reuniões / Pessoas:</span>
+                  <span class="font-bold text-indigo-700">${stats.reunioes} reuns. (${stats.pessoas} pess.)</span>
+                </div>
+              </div>
+              <div class="mt-2 text-[11px] text-slate-500 truncate max-w-[200px]">
+                <strong>Lideranças:</strong> ${sanitize(stats.leaderNames.join(', '))}
+              </div>
+            </div>
+          `;
+
+          const circleMarker = L.circleMarker([coords.lat, coords.lng], {
+            radius: Math.max(8, Math.min(22, Math.sqrt(metricVal) * 2.5)),
+            fillColor: '#1d3a63',
+            color: '#d9a64c',
+            weight: 2,
+            opacity: 0.9,
+            fillOpacity: 0.6
+          }).bindPopup(popupContent);
+
+          markersGroup.addLayer(circleMarker);
+        }
+      });
+
+      // Add Heat layer if Leaflet.heat is available
+      if (typeof L.heatLayer === 'function' && currentMapLayer === 'heat') {
+        heatLayer = L.heatLayer(heatPoints, {
+          radius: 30,
+          blur: 20,
+          maxZoom: 15,
+          gradient: { 0.2: 'blue', 0.4: 'cyan', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red' }
+        }).addTo(map);
+      }
+
+      document.getElementById('mapPointsSummary').textContent = `${totalMappedBairros} bairros mapeados em Jaboatão`;
+    }
+
+    function setMapMetric(metric) {
+      currentMapMetric = metric;
+      ['certos', 'confirmados', 'prometidos'].forEach(m => {
+        const btn = document.getElementById(`mapMetric-${m}`);
+        if (m === metric) {
+          btn.className = "px-2.5 py-1 rounded-lg bg-white shadow font-bold text-blue-700";
+        } else {
+          btn.className = "px-2.5 py-1 rounded-lg hover:bg-slate-200 text-slate-600 font-medium";
+        }
+      });
+      updateHeatmapData();
+    }
+
+    function toggleMapLayer(layer) {
+      currentMapLayer = layer;
+      const btnHeat = document.getElementById('btnToggleHeat');
+      const btnMarkers = document.getElementById('btnToggleMarkers');
+
+      if (layer === 'heat') {
+        btnHeat.className = "px-3 py-1.5 rounded-xl bg-amber-500 text-brand-900 font-bold text-xs hover:bg-amber-400 transition shadow";
+        btnMarkers.className = "px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs hover:bg-slate-200 transition";
+      } else {
+        btnMarkers.className = "px-3 py-1.5 rounded-xl bg-amber-500 text-brand-900 font-bold text-xs hover:bg-amber-400 transition shadow";
+        btnHeat.className = "px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs hover:bg-slate-200 transition";
+      }
+
+      updateHeatmapData();
+    }
+
+    function getFilteredLeaders() {
+      const q = (document.getElementById('searchBox')?.value || '').trim().toLowerCase();
+      const bFilter = document.getElementById('bairroFilter')?.value || '';
+      const sFilter = document.getElementById('statusFilter')?.value || '';
+      const pFilter = document.getElementById('prioridadeFilter')?.value || '';
+
+      return leadersData.filter(d => {
+        const matchesQ = !q || [d.nome, d.bairro, d.coordenador, d.telefone, d.observacao]
+          .some(field => (field || '').toLowerCase().includes(q));
+        const matchesB = !bFilter || (d.bairro || '') === bFilter;
+        const matchesS = !sFilter || d.status === sFilter;
+        const matchesP = !pFilter || d.prioridade === pFilter;
+
+        return matchesQ && matchesB && matchesS && matchesP;
+      }).sort((a, b) => {
+        let valA, valB;
+        if (currentSortKey === 'reunioesCount') {
+          valA = (a.reunioes || []).length;
+          valB = (b.reunioes || []).length;
+        } else if (currentSortKey === 'pessoasTotal') {
+          valA = getPeopleTotal(a);
+          valB = getPeopleTotal(b);
+        } else {
+          valA = a[currentSortKey];
+          valB = b[currentSortKey];
+        }
+
+        if (typeof valA === 'number' || typeof valB === 'number') {
+          return ((valA || 0) - (valB || 0)) * currentSortDir;
+        }
+        valA = (valA || '').toString().toLowerCase();
+        valB = (valB || '').toString().toLowerCase();
+        return valA.localeCompare(valB) * currentSortDir;
+      });
+    }
+
+    function sortBy(key) {
+      if (currentSortKey === key) {
+        currentSortDir *= -1;
+      } else {
+        currentSortKey = key;
+        currentSortDir = -1; // Default descending
+      }
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const emptyState = document.getElementById('emptyState');
+      const rows = getFilteredLeaders();
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      tbody.innerHTML = rows.map(r => {
+        const totalPessoas = getPeopleTotal(r);
+        const reunioesCount = (r.reunioes || []).length;
+
+        // Find last meeting info
+        let lastMeetingStr = '<span class="text-slate-400 font-normal">Nenhuma</span>';
+        if (reunioesCount > 0) {
+          const sortedM = [...r.reunioes].sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+          const last = sortedM[0];
+          const formattedDate = last.data ? last.data.split('-').reverse().join('/') : 'S/ Data';
+          lastMeetingStr = `<div class="font-semibold text-slate-800">${sanitize(last.local || 'Local não reg.')}</div>
+                            <div class="text-[10px] text-slate-500"><i class="fa-regular fa-calendar mr-1"></i>${formattedDate} (${last.pessoas || 0} pess.)</div>`;
+        }
+
+        // WhatsApp Link
+        const cleanPhone = (r.telefone || '').replace(/\D/g, '');
+        const waBtn = cleanPhone ? `
+          <a href="https://wa.me/55${cleanPhone}" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1 text-xs" title="Abrir WhatsApp">
+            <i class="fa-brands fa-whatsapp text-sm"></i> ${sanitize(r.telefone)}
+          </a>
+        ` : `<span class="text-slate-400">${sanitize(r.telefone || 'Sem contato')}</span>`;
+
+        // Status Badge class
+        const statusColors = {
+          'Confirmado': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          'Ativo': 'bg-brand-50 text-brand-800 border-brand-100',
+          'Pendente': 'bg-amber-100 text-amber-800 border-amber-200',
+          'Cancelado': 'bg-red-100 text-red-800 border-red-200'
+        };
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition group">
+            <td class="p-3 font-semibold text-slate-900">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full ${r.prioridade === 'Alta' ? 'bg-red-500' : (r.prioridade === 'Média' ? 'bg-amber-400' : 'bg-slate-300')}" title="Prioridade ${r.prioridade}"></span>
+                ${sanitize(r.nome)}
+              </div>
+            </td>
+            <td class="p-3 text-slate-700">
+              <span class="px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-200 font-medium">
+                <i class="fa-solid fa-location-dot text-amber-500 mr-1 text-[10px]"></i>${sanitize(r.bairro || 'Não informado')}
+              </span>
+            </td>
+            <td class="p-3 text-slate-600">${sanitize(r.coordenador || '-')}</td>
+            <td class="p-3">${waBtn}</td>
+            <td class="p-3 text-right font-medium text-amber-700">${(r.prometidos || 0).toLocaleString('pt-BR')}</td>
+            <td class="p-3 text-right font-bold text-blue-700 bg-blue-50/40">${(r.certos || 0).toLocaleString('pt-BR')}</td>
+            <td class="p-3 text-right font-bold text-emerald-700">${(r.confirmados || 0).toLocaleString('pt-BR')}</td>
+            <td class="p-3 text-center">
+              <button onclick="openMeetingsModal('${r.id}')" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold transition text-xs flex items-center gap-1 mx-auto">
+                <i class="fa-solid fa-calendar-days text-[10px]"></i> ${reunioesCount} reunião(ões)
+              </button>
+            </td>
+            <td class="p-3 text-right font-bold text-slate-800">${totalPessoas.toLocaleString('pt-BR')}</td>
+            <td class="p-3 text-center">${lastMeetingStr}</td>
+            <td class="p-3 text-center">
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${statusColors[r.status] || statusColors['Ativo']}">
+                ${sanitize(r.status)}
+              </span>
+            </td>
+            <td class="p-3 text-center no-print">
+              <div class="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100 transition">
+                <button onclick="openLeaderModal('${r.id}')" class="p-1.5 text-slate-500 hover:text-brand-800 hover:bg-slate-200 rounded-lg transition" title="Editar Liderança">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="confirmDeleteLeader('${r.id}')" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Excluir Liderança">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function populateBairroDropdown() {
+      const select = document.getElementById('bairroFilter');
+      if (!select) return;
+
+      const currentVal = select.value;
+      const bairros = [...new Set(leadersData.map(d => (d.bairro || '').trim()).filter(Boolean))].sort();
+
+      select.innerHTML = '<option value="">Todos os Bairros</option>' +
+        bairros.map(b => `<option value="${sanitize(b)}"${b === currentVal ? ' selected' : ''}>${sanitize(b)}</option>`).join('');
+    }
+
+    function renderMeetingsList() {
+      const tbody = document.getElementById('meetingsListBody');
+      const emptyState = document.getElementById('meetingsListEmpty');
+      const totalBadge = document.getElementById('meetingsTotalBadge');
+
+      const allMeetings = [];
+      leadersData.forEach(leader => {
+        (leader.reunioes || []).forEach((m, idx) => {
+          allMeetings.push({
+            leaderId: leader.id,
+            leaderName: leader.nome,
+            leaderBairro: leader.bairro,
+            meetingIdx: idx,
+            data: m.data,
+            local: m.local,
+            pessoas: m.pessoas || 0
+          });
+        });
+      });
+
+      totalBadge.textContent = `${allMeetings.length} Reunião(ões) Registrada(s)`;
+
+      if (allMeetings.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      allMeetings.sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+
+      tbody.innerHTML = allMeetings.map(item => {
+        const formattedDate = item.data ? item.data.split('-').reverse().join('/') : 'Data não informada';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-semibold text-slate-900">
+              <i class="fa-regular fa-calendar-check text-indigo-600 mr-1.5"></i>${formattedDate}
+            </td>
+            <td class="p-3 font-medium text-slate-800">${sanitize(item.local || 'Local não especificado')}</td>
+            <td class="p-3 font-semibold text-brand-900">${sanitize(item.leaderName)}</td>
+            <td class="p-3 text-slate-600">
+              <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                ${sanitize(item.leaderBairro || 'Jaboatão')}
+              </span>
+            </td>
+            <td class="p-3 text-right font-bold text-teal-700">${(item.pessoas || 0).toLocaleString('pt-BR')} pessoas</td>
+            <td class="p-3 text-center">
+              <button onclick="openMeetingsModal('${item.leaderId}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                Gerenciar
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderCoordinators() {
+      const container = document.getElementById('coordinatorsGrid');
+      const emptyState = document.getElementById('coordinatorsEmpty');
+
+      const coordStats = {};
+
+      leadersData.forEach(d => {
+        const cName = (d.coordenador || 'Sem Coordenador Atribuído').trim();
+        if (!coordStats[cName]) {
+          coordStats[cName] = {
+            leadersCount: 0,
+            certos: 0,
+            confirmados: 0,
+            bairros: new Set()
+          };
+        }
+        coordStats[cName].leadersCount += 1;
+        coordStats[cName].certos += (d.certos || 0);
+        coordStats[cName].confirmados += (d.confirmados || 0);
+        if (d.bairro) coordStats[cName].bairros.add(d.bairro.trim());
+      });
+
+      const entries = Object.entries(coordStats).sort((a, b) => b[1].certos - a[1].certos);
+
+      if (entries.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      container.innerHTML = entries.map(([name, stats]) => `
+        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-brand-800 text-white flex items-center justify-center font-bold text-xs">
+                <i class="fa-solid fa-user-tie"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-brand-900 text-sm">${sanitize(name)}</h4>
+                <span class="text-[10px] text-slate-500 font-medium">${stats.leadersCount} Liderança(s)</span>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-xs">
+              ${stats.certos} Votos Certos
+            </span>
+          </div>
+
+          <div class="text-xs space-y-1">
+            <div class="flex justify-between text-slate-600">
+              <span>Votos Confirmados:</span>
+              <span class="font-bold text-emerald-700">${stats.confirmados}</span>
+            </div>
+            <div class="text-slate-500 text-[11px] pt-1">
+              <strong>Bairros Atendidos:</strong> ${sanitize([...stats.bairros].join(', ') || 'Nenhum')}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openLeaderModal(id = null) {
+      const modal = document.getElementById('leaderModal');
+      const title = document.getElementById('leaderModalTitle');
+      const form = document.getElementById('leaderForm');
+
+      form.reset();
+      document.getElementById('formLeaderId').value = '';
+
+      if (id) {
+        const item = leadersData.find(d => d.id === id);
+        if (item) {
+          title.textContent = 'Editar Liderança';
+          document.getElementById('formLeaderId').value = item.id;
+          document.getElementById('formNome').value = item.nome || '';
+          document.getElementById('formBairro').value = item.bairro || '';
+          document.getElementById('formCoordenador').value = item.coordenador || '';
+          document.getElementById('formTelefone').value = item.telefone || '';
+          document.getElementById('formPrometidos').value = item.prometidos || 0;
+          document.getElementById('formCertos').value = item.certos || 0;
+          document.getElementById('formConfirmados').value = item.confirmados || 0;
+          document.getElementById('formPrioridade').value = item.prioridade || 'Média';
+          document.getElementById('formStatus').value = item.status || 'Ativo';
+          document.getElementById('formObservacao').value = item.observacao || '';
+        }
+      } else {
+        title.textContent = 'Nova Liderança';
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeLeaderModal() {
+      document.getElementById('leaderModal').classList.add('hidden');
+    }
+
+    function saveLeaderForm(e) {
+      e.preventDefault();
+
+      const id = document.getElementById('formLeaderId').value;
+      const nome = document.getElementById('formNome').value.trim();
+      const bairro = document.getElementById('formBairro').value.trim();
+      const coordenador = document.getElementById('formCoordenador').value.trim();
+      const telefone = document.getElementById('formTelefone').value.trim();
+      const prometidos = parseInt(document.getElementById('formPrometidos').value) || 0;
+      const certos = parseInt(document.getElementById('formCertos').value) || 0;
+      const confirmados = parseInt(document.getElementById('formConfirmados').value) || 0;
+      const prioridade = document.getElementById('formPrioridade').value;
+      const status = document.getElementById('formStatus').value;
+      const observacao = document.getElementById('formObservacao').value.trim();
+
+      if (id) {
+        // Update
+        const item = leadersData.find(d => d.id === id);
+        if (item) {
+          item.nome = nome;
+          item.bairro = bairro;
+          item.coordenador = coordenador;
+          item.telefone = telefone;
+          item.prometidos = prometidos;
+          item.certos = certos;
+          item.confirmados = confirmados;
+          item.prioridade = prioridade;
+          item.status = status;
+          item.observacao = observacao;
+        }
+      } else {
+        // Create new
+        leadersData.unshift({
+          id: generateId(),
+          nome,
+          bairro,
+          coordenador,
+          telefone,
+          prometidos,
+          certos,
+          confirmados,
+          prioridade,
+          status,
+          observacao,
+          reunioes: []
+        });
+      }
+
+      saveData();
+      closeLeaderModal();
+      renderAllViews();
+    }
+
+    function confirmDeleteLeader(id) {
+      const item = leadersData.find(d => d.id === id);
+      if (!item) return;
+
+      showConfirmModal(
+        'Excluir Liderança',
+        `Deseja realmente remover a liderança "${item.nome}"? Esta ação não poderá ser desfeita.`,
+        () => {
+          leadersData = leadersData.filter(d => d.id !== id);
+          saveData();
+          renderAllViews();
+        }
+      );
+    }
+
+    function openMeetingsModal(leaderId) {
+      activeMeetingLeaderId = leaderId;
+      const leader = leadersData.find(d => d.id === leaderId);
+      if (!leader) return;
+
+      document.getElementById('meetingsModalLeaderName').textContent = `Reuniões • ${leader.nome} (${leader.bairro || 'Jaboatão'})`;
+      renderMeetingsModalBody();
+      document.getElementById('meetingsModal').classList.remove('hidden');
+    }
+
+    function closeMeetingsModal() {
+      document.getElementById('meetingsModal').classList.add('hidden');
+      activeMeetingLeaderId = null;
+      renderAllViews();
+    }
+
+    function renderMeetingsModalBody() {
+      const leader = leadersData.find(d => d.id === activeMeetingLeaderId);
+      if (!leader) return;
+
+      const tbody = document.getElementById('meetingsModalBody');
+      const emptyState = document.getElementById('meetingsModalEmpty');
+      const summary = document.getElementById('meetingsModalSummary');
+
+      const reunioes = leader.reunioes || [];
+
+      if (reunioes.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+        tbody.innerHTML = reunioes.map((m, idx) => `
+          <tr>
+            <td class="p-2">
+              <input type="date" value="${m.data || ''}" onchange="updateMeetingField(${idx}, 'data', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:bg-white">
+            </td>
+            <td class="p-2">
+              <input type="text" value="${sanitize(m.local || '')}" placeholder="Local da reunião" onchange="updateMeetingField(${idx}, 'local', this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:bg-white">
+            </td>
+            <td class="p-2 text-right">
+              <input type="number" min="0" value="${m.pessoas || 0}" onchange="updateMeetingField(${idx}, 'pessoas', this.value)" class="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-right font-bold focus:outline-none focus:bg-white">
+            </td>
+            <td class="p-2 text-center">
+              <button onclick="deleteMeetingRow(${idx})" class="p-1 text-slate-400 hover:text-red-600 transition">
+                <i class="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      const totalPessoas = getPeopleTotal(leader);
+      summary.textContent = `Total: ${reunioes.length} reuniões • ${totalPessoas} pessoas participantes`;
+    }
+
+    function addMeetingRow() {
+      const leader = leadersData.find(d => d.id === activeMeetingLeaderId);
+      if (!leader) return;
+
+      if (!Array.isArray(leader.reunioes)) leader.reunioes = [];
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      leader.reunioes.push({
+        data: todayStr,
+        local: 'Endereço / Associação no Bairro',
+        pessoas: 20
+      });
+
+      saveData();
+      renderMeetingsModalBody();
+    }
+
+    function updateMeetingField(idx, field, value) {
+      const leader = leadersData.find(d => d.id === activeMeetingLeaderId);
+      if (!leader || !leader.reunioes[idx]) return;
+
+      if (field === 'pessoas') value = Math.max(0, parseInt(value) || 0);
+      leader.reunioes[idx][field] = value;
+
+      saveData();
+      renderMeetingsModalBody();
+    }
+
+    function deleteMeetingRow(idx) {
+      const leader = leadersData.find(d => d.id === activeMeetingLeaderId);
+      if (!leader || !leader.reunioes[idx]) return;
+
+      leader.reunioes.splice(idx, 1);
+      saveData();
+      renderMeetingsModalBody();
+    }
+
+    function exportData() {
+      const jsonStr = JSON.stringify(leadersData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `liderancas_jaboatao_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function triggerImport() {
+      document.getElementById('importInput').click();
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (Array.isArray(imported)) {
+            leadersData = imported;
+            saveData();
+            renderAllViews();
+            showMsgModal("Importação Concluída", "Os dados de lideranças foram importados com sucesso!");
+          } else {
+            showMsgModal("Erro na Importação", "O arquivo selecionado não contém um formato de lista válido.");
+          }
+        } catch (err) {
+          showMsgModal("Erro na Leitura", "Falha ao ler o arquivo JSON. Certifique-se de ser um arquivo válido.");
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function showMsgModal(title, message) {
+      document.getElementById('msgModalTitle').textContent = title;
+      document.getElementById('msgModalBody').textContent = message;
+      document.getElementById('msgModalButtons').innerHTML = `
+        <button onclick="closeMsgModal()" class="px-4 py-2 bg-brand-800 text-white font-semibold rounded-xl text-xs hover:bg-brand-900 transition">
+          Entendido
+        </button>
+      `;
+      document.getElementById('messageModal').classList.remove('hidden');
+    }
+
+    function showConfirmModal(title, message, onConfirm) {
+      document.getElementById('msgModalTitle').textContent = title;
+      document.getElementById('msgModalBody').textContent = message;
+      
+      const btnContainer = document.getElementById('msgModalButtons');
+      btnContainer.innerHTML = `
+        <button onclick="closeMsgModal()" class="px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-200 transition">
+          Cancelar
+        </button>
+        <button id="confirmBtnAction" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-xl text-xs hover:bg-red-700 transition">
+          Confirmar
+        </button>
+      `;
+
+      document.getElementById('confirmBtnAction').onclick = function() {
+        closeMsgModal();
+        onConfirm();
+      };
+
+      document.getElementById('messageModal').classList.remove('hidden');
+    }
+
+    function closeMsgModal() {
+      document.getElementById('messageModal').classList.add('hidden');
+    }
+
+    // Attach Event Listeners
+    function setupEventListeners() {
+      document.getElementById('searchBox')?.addEventListener('input', renderTable);
+      document.getElementById('bairroFilter')?.addEventListener('change', renderTable);
+      document.getElementById('statusFilter')?.addEventListener('change', renderTable);
+      document.getElementById('prioridadeFilter')?.addEventListener('change', renderTable);
+    }
+  </script>
+
+</body>
+</html>
