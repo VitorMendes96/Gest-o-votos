@@ -728,37 +728,6 @@
     function generateId() {
       return 'lid_' + Math.random().toString(36).substring(2, 9);
     }
-
-    // Helper to sanitize HTML strings
-    function sanitize(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    window.onload = function() {
-      loadData();
-      setupEventListeners();
-    };
-
-    function loadData() {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          leadersData = JSON.parse(stored);
-        } else {
-          // Initialize with clean realistic Jaboatão sample base if empty
-          leadersData = getInitialJaboataoBase();
-          saveData(false);
-        }
-      } catch (e) {
-        console.error("Error loading localStorage:", e);
-        leadersData = getInitialJaboataoBase();
-      }
-
       // Guarantee proper structure
       leadersData.forEach(item => {
         if (!Array.isArray(item.reunioes)) item.reunioes = [];
@@ -783,9 +752,11 @@
       }
     }
 
-    function getInitialJaboataoBase() {
-      return [
-        {
+     function getInitialJaboataoBase() {
+     2
+     return [];
+     3
+        }
           id: generateId(),
           nome: "Dra. Renata Vasconcelos",
           bairro: "Piedade",
