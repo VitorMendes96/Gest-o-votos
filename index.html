@@ -1569,24 +1569,6 @@
           item.status = status;
           item.observacao = observacao;
         }
-      } else {
-        // Create new
-        leadersData.unshift({
-          id: generateId(),
-          nome,
-          bairro,
-          coordenador,
-          telefone,
-          prometidos,
-          certos,
-          confirmados,
-          prioridade,
-          status,
-          observacao,
-          reunioes: []
-        });
-      }
-
       saveData();
       closeLeaderModal();
       renderAllViews();
