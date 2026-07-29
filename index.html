@@ -1784,7 +1784,8 @@
       document.getElementById('prioridadeFilter')?.addEventListener('change', renderTable);
     }
 
-const supabaseUrl = "https://jmynlfvqwfrvhjgulzzb.supabase.co/rest/v1/";
+const supabaseUrl = "https://jmynlfvqwfrvhjgulzzb.supabase.co";
+
 const supabaseKey = "sb_publishable_Tjj3Oa9ol8NXQOXTh-o_vw_t7gsqL_5";
 
 const supabaseClient = supabase.createClient(
@@ -1794,8 +1795,8 @@ const supabaseClient = supabase.createClient(
 
 async function testarSupabase() {
   const { data, error } = await supabaseClient
-    .from('liderancas')
-    .select('*');
+    .from("liderancas")
+    .select("*");
 
   console.log("DADOS:", data);
   console.log("ERRO:", error);
